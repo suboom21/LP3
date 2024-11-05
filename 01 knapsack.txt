@@ -1,0 +1,19 @@
+def knapsack_dp(W, profit, weight, n): 
+    K = [[0 for x in range(W + 1)] for x in range(n + 1)] 
+    for i in range(n + 1): 
+        for w in range(W + 1): 
+            if i == 0 or w == 0: 
+                K[i][w] == 0 
+            elif weight[i - 1] <= w: 
+                K[i][w] = max (profit[i - 1] + K[i - 1][w - weight[i - 1]], K[i - 1][w]) 
+            else: 
+                K[i][w] = K[i - 1][w] 
+    return K[n][w] 
+W = int(input("Enter the capacity: ")) 
+n = int(input("Enter the number of items: ")) 
+profit = [] 
+weight = [] 
+for i in range(n): 
+    profit.append(int(input("Enter the profit: "))) 
+    weight.append(int(input("Enter the weight: "))) 
+print(knapsack_dp(W, profit, weight, n))
