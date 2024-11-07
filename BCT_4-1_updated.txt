@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract StudentDatabase {
+
+    struct Student {
+        string name;
+        uint256 rollno;
+        string class;
+    }
+
+    Student[] private students;
+
+    event StudentAdded(string name, uint256 rollno, string class);
+
+    function addStudent(string memory name, uint256 rollno, string memory class) public {
+        students.push(Student(name, rollno, class));
+        emit StudentAdded(name, rollno, class);
+    }
+
+    function getStudentById(uint256 id) public view returns (string memory, uint256, string memory) {
+        require(id < students.length, "Student does not exist in database");
+        return (students[id].name, students[id].rollno, students[id].class);
+    }
+
+    function getTotalNumberOfStudents() public view returns (uint256) {
+        return students.length;
+    }
+
+    function updateStudent(uint256 id, string memory name, string memory class) public {
+        require(id < students.length, "Student does not exist in database");
+        students[id].name = name;
+        students[id].class = class;
+    }
+
+    function deleteStudent(uint256 id) public {
+        require(id < students.length, "Student does not exist in database");
+        for (uint256 i = id; i < students.length - 1; i++) {
+            students[i] = students[i + 1];
+        }
+        students.pop();
+    }
+
+    function getAllStudents() public view returns (Student[] memory) {
+        return students;
+    }
+
+    fallback() external payable {
+        revert("Invalid function call or data sent to contract.");
+    }
+
+    receive() external payable {
+    }
+}
