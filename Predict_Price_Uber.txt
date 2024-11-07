@@ -1,144 +1,124 @@
-#Predict the price of the Uber ride from a given pickup point to the agreed drop-off location. Perform following
-tasks:
-1. Pre-process the dataset.
-2. Identify outliers.
-3. Check the correlation.
-4. Implement linear regression and random forest regression models.
-5. Evaluate the models and compare their respective scores like R2, RMSE, etc. 
-
-#Importing the required libraries
 import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-
-#importing the dataset
-df = pd.read_csv("uber.csv")
-df.head()
-df.info() #To get the required information of the dataset
-df.columns #TO get number of columns in the dataset
-
-df = df.drop(['Unnamed: 0', 'key'], axis= 1)
-df.head()
-df.shape
-df.dtypes
-df.pickup_datetime = pd.to_datetime(df.pickup_datetime)
-df.dtypes
-
-df.isnull().sum()
-df['dropoff_latitude'].fillna(value=df['dropoff_latitude'].mean(),inplace = True)
-df['dropoff_longitude'].fillna(value=df['dropoff_longitude'].median(),inplace = True)
-df.isnull().sum()
-df= df.assign(hour = df.pickup_datetime.dt.hour,
- day= df.pickup_datetime.dt.day,
- month = df.pickup_datetime.dt.month,
- year = df.pickup_datetime.dt.year,
- dayofweek = df.pickup_datetime.dt.dayofweek)
-
-df.head()
-from math import *
-# function to calculate the travel distance from the longitudes and latitudes
-def distance_transform(longitude1, latitude1, longitude2, latitude2):
- travel_dist = []
- 
- for pos in range(len(longitude1)):
- long1,lati1,long2,lati2 = map(radians,[longitude1[pos],latitude1[pos],longitude2[pos],latitude2[pos]])
- dist_long = long2 - long1
- dist_lati = lati2 - lati1
- a = sin(dist_lati/2)**2 + cos(lati1) * cos(lati2) * sin(dist_long/2)**2
- c = 2 * asin(sqrt(a))*6371
- travel_dist.append(c)
- 
- return travel_dist
-
-df['dist_travel_km'] = distance_transform(df['pickup_longitude'].to_numpy(),
- df['pickup_latitude'].to_numpy(),
- df['dropoff_longitude'].to_numpy(),
- df['dropoff_latitude'].to_numpy()
- )
-df.head()
-df.plot(kind = "box",subplots = True,layout = (7,2),figsize=(15,20))
-
-#Using the InterQuartile Range to fill the values
-def remove_outlier(df1 , col):
- Q1 = df1[col].quantile(0.25)
- Q3 = df1[col].quantile(0.75)
- IQR = Q3 - Q1
- lower_whisker = Q1-1.5*IQR
- upper_whisker = Q3+1.5*IQR
- df[col] = np.clip(df1[col] , lower_whisker , upper_whisker)
- return df1
-def treat_outliers_all(df1 , col_list):
- for c in col_list:
- df1 = remove_outlier(df , c)
- return df1
-df = treat_outliers_all(df , df.iloc[: , 0::])
-
-df.plot(kind = "box",subplots = True,layout = (7,2),figsize=(15,20))
-
-#Uber doesn't travel over 130 kms so minimize the distance 
-df= df.loc[(df.dist_travel_km >= 1) | (df.dist_travel_km <= 130)]
-print("Remaining observastions in the dataset:", df.shape)
-
-#Finding inccorect latitude (Less than or greater than 90) and longitude (greater than or less than 180)
-incorrect_coordinates = df.loc[(df.pickup_latitude > 90) |(df.pickup_latitude < -90) |
- (df.dropoff_latitude > 90) |(df.dropoff_latitude < -90) |
- (df.pickup_longitude > 180) |(df.pickup_longitude < -180) |
- (df.dropoff_longitude > 90) |(df.dropoff_longitude < -90)
- ]
-
-df.drop(incorrect_coordinates, inplace = True, errors = 'ignore')
-
-df.head()
-df.isnull().sum()
-sns.heatmap(df.isnull())
-
-corr = df.corr()
-corr
-fig,axis = plt.subplots(figsize = (10,6))
-sns.heatmap(df.corr(),annot = True) #Correlation Heatmap (Light values means highly correlated)
-
-
-x = df[['pickup_longitude','pickup_latitude','dropoff_longitude','dropoff_latitude','passenger_count','hour','day','month','year','dayofweek','dist_travel_km']]
-y = df['fare_amount']
-
+from matplotlib.cbook import boxplot_stats
+from sklearn import metrics
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-X_train,X_test,y_train,y_test = train_test_split(x,y,test_size = 0.33)
-
+from geopy import point,distance
+from math import *
 from sklearn.linear_model import LinearRegression
-regression = LinearRegression()
-
-regression.fit(X_train,y_train)
-
-regression.intercept_
-regression.coef_ 
-prediction = regression.predict(X_test)
-print(prediction)
-y_test
-
-
-
-from sklearn.metrics import r2_score
-r2_score(y_test,prediction)
-from sklearn.metrics import mean_squared_error
-
-MSE = mean_squared_error(y_test,prediction)
-MSE
-RMSE = np.sqrt(MSE)
-
-RMSE
 from sklearn.ensemble import RandomForestRegressor
-rf = RandomForestRegressor(n_estimators=100) #Here n_estimators means number of trees you want to build before making the prediction
-rf.fit(X_train,y_train)
+import plotly.express as px
+import warnings
+warnings.filterwarnings("ignore")
 
-y_pred = rf.predict(X_test)
-y_pred
+df=pd.read_csv("uber.csv")
 
-R2_Random = r2_score(y_test,y_pred)
-R2_Random
+df
 
-MSE_Random = mean_squared_error(y_test,y_pred)
-MSE_Random
+df.head()
 
-RMSE_Random = np.sqrt(MSE_Random)
-RMSE_Random
+df=df.drop(["Unnamed: 0","key"],axis=1)
+
+df
+
+df.info()
+
+df["pickup_datetime"]=pd.to_datetime(df["pickup_datetime"],errors="coerce")
+
+df.isna().sum()
+
+df=df.dropna()
+
+df.isna().sum()
+
+df.describe().T
+
+def distance_transform(longitude1,latitude1,longitude2,latitude2):
+    distance=[]
+    for pos in range(len(longitude1)):
+        longi1,lati1,longi2,lati2=map(radians,[longitude1[pos],latitude1[pos],longitude2[pos],latitude2[pos]])
+        dist_longi=longi2-longi1
+        dist_lati=lati2-lati1
+        a= sin(dist_lati/2)**2+ cos(lati1) * cos(lati2) * sin(dist_longi/2)**2
+        c=asin(sqrt(a))*6371
+        distance.append(c)
+    return distance
+
+df["distance_km"]=distance_transform(df["pickup_longitude"].to_numpy(),df["pickup_latitude"].to_numpy(),df["dropoff_longitude"].to_numpy(),df["dropoff_latitude"].to_numpy())
+
+df=df.assign(pickup_hr=df.pickup_datetime.dt.hour,
+            date=df.pickup_datetime.dt.date,
+            month=df.pickup_datetime.dt.month,
+            year=df.pickup_datetime.dt.year,
+            day_of_week=df.pickup_datetime.dt.day_of_week,
+            day_name=df.pickup_datetime.dt.day_name())
+
+df.head()
+
+def find_outliers(df):
+    q1=df.quantile(0.25)
+    q3=df.quantile(0.75)
+    IQR=q3-q1
+    outliers = df[((df<(q1-1.5*IQR)) | (df>(q3+1.5*IQR)))]
+    return outliers
+
+outliers = find_outliers(df['fare_amount'])
+print('number of outliers:' + str(len(outliers)))
+print('max outlier value:' + str(outliers.max()))
+print('min outlier value:' + str(outliers.min()))
+outliers
+
+outliers=find_outliers(df["passenger_count"])
+print("number of outliers = ",len(outliers))
+print("maximum outlier value = ",outliers.max())
+print("minimum outlier value = ",outliers.min()) 
+outliers
+
+df.drop(df[df['distance_km'] == 0].index, inplace = True)
+df.drop(df[df['distance_km'] > 60].index, inplace = True)
+df.drop(df[df['fare_amount'] > 100].index, inplace = True)
+df.drop(df[df['fare_amount'] < 0].index, inplace = True)
+df.drop(df[df['passenger_count'] > 6].index, inplace = True)
+
+new_df=df.select_dtypes(include="number")
+
+plt.figure(figsize=(12,10))
+sns.heatmap(new_df.corr(),annot=True)
+plt.show()
+
+x=df[["year","distance_km"]]
+y=df[["fare_amount"]]
+
+scaler=StandardScaler()
+
+x=scaler.fit_transform(x)
+
+x_train,x_test,y_train,y_test=train_test_split(x,y,test_size=0.3,random_state=42)
+
+model=LinearRegression()
+model.fit(x_train,y_train)
+
+y_pred=model.predict(x_test)
+
+sns.regplot(x=y_test, y=y_pred, color="red", line_kws={"color" : "blue"})
+plt.show()
+
+print("Mean absolute error = ",metrics.mean_absolute_error(y_test,y_pred))
+print("Mean squared error = ",metrics.mean_squared_error(y_test,y_pred))
+print("root Mean squared error = ",sqrt(metrics.mean_absolute_error(y_test,y_pred)))
+
+model=RandomForestRegressor()
+
+model.fit(x_train,y_train)
+
+y_pred=model.predict(x_test)
+
+sns.regplot(x=y_test,y=y_pred,color="red",line_kws={"color":"blue"})
+plt.show()
+
+print("Mean absolute error = ",metrics.mean_absolute_error(y_test,y_pred))
+print("Mean squared error = ",metrics.mean_squared_error(y_test,y_pred))
+print("root Mean squared error = ",sqrt(metrics.mean_absolute_error(y_test,y_pred)))
