@@ -3,7 +3,7 @@ def knapsack_dp(W, profit, weight, n):
     for i in range(n + 1): 
         for w in range(W + 1): 
             if i == 0 or w == 0: 
-                K[i][w] == 0 
+                K[i][w] = 0 
             elif weight[i - 1] <= w: 
                 K[i][w] = max (profit[i - 1] + K[i - 1][w - weight[i - 1]], K[i - 1][w]) 
             else: 
